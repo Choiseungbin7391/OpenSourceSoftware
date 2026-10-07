@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>순수 JS 3D 렌더링 프로세스 시뮬레이터</title>
+    <style>
+        body { margin: 0; background-color: #1a1a1a; display: flex; justify-content: center; align-items: center; height: 100vh; color: white; font-family: sans-serif; }
+        canvas { border: 1px solid #444; background-color: #111; }
+        .info { position: absolute; top: 10px; left: 10px; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div class="info">화면을 마우스로 드래그하면 회전합니다.</div>
+    <canvas id="renderCanvas" width="600" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById('renderCanvas');
+        const ctx = canvas.getContext('2d');
+        const WIDTH = canvas.width;
+        const HEIGHT = canvas.height;
+
+        // --- [1단계] 3D 객체 데이터 정의 (정점 및 면) ---
+        
+        // 1. 정점(Vertices) 데이터: 중심이 (0,0,0)인 정육면체의 8개 꼭짓점 (X, Y, Z)
+        const vertices = [
+            {x: -1, y: -1, z: -1}, // 0번 정점
+            {x:  1, y: -1, z: -1}, // 1번 정점
+            {x:  1, y:  1, z: -1}, // 2번 정점
+            {x: -1, y:  1, z: -1}, // 3번 정점
+            {x: -1, y: -1, z:  1}, // 4번 정점
+            {x:  1, y: -1, z:  1}, // 5번 정점
+            {x:  1, y:  1, z:  1}, // 6번 정점
+            {x: -1, y:  1, z:  1}  // 7번 정점
+        ];
+
+        // 2. 면(Faces) 데이터
+        // 텍스트 유실을 막기 위해 문자열로 선언한 후, 하단에서 배열로 안전하게 파싱합니다.
+        const rawFacesData = [
+            { indicesStr: "0,1,2,3", color: 'rgba(255, 99, 132, 0.4)' },  // 뒷면
+            { indicesStr: "1,5,6,2", color: 'rgba(54, 162, 235, 0.4)' },  // 우측면
+            { indicesStr: "4,5,6,7", color: 'rgba(255, 206, 86, 0.4)' },  // 앞면
+            { indicesStr: "0,4,7,3", color: 'rgba(75, 192, 192, 0.4)' },  // 좌측면
+            { indicesStr: "0,1,5,4", color: 'rgba(153, 102, 255, 0.4)' }, // 아랫면
+            { indicesStr: "3,2,6,7", color: 'rgba(255, 159, 64, 0.4)' }   // 윗면
+        ];
+
+        // 문자열 데이터를 실제 숫자 배열[indices]로 복원
+        const faces = rawFacesData.map(face => ({
+            indices: face.indicesStr.split(',').map(Number),
+            color: face.color
+        }));
+
+        // 회전 각도 상태 변수
+        let angleX = 0.5;
+        let angleY = 0.5;
+
+        // --- [2단계 & 3단계] 수학적 연산 함수 정의 ---
+
+        // X축 기준 회전 함수
+        function rotateX(point, angle) {
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            return {
+                x: point.x,
+                y: point.y * cos - point.z * sin,
+                z: point.y * sin + point.z * cos
+            };
+        }
+
+        // Y축 기준 회전 함수
+        function rotateY(point, angle) {
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            return {
+                x: point.x * cos + point.z * sin,
+                y: point.y,
+                z: -point.x * sin + point.z * cos
+            };
+        }
+
+        // 원근 투영 함수 (3D -> 2D 변환)
+        function project(point) {
+            const fov = 400;          // 초점 거리
+            const distance = 3.5;     // 카메라와 물체 사이의 거리
+            
+            const zObject = point.z + distance;
+
+            // 원근감 계산: Z축 값(깊이)으로 X, Y를 나누어 멀리 있을수록 작게 보이게 함
+            const x2d = (point.x * fov) / zObject + WIDTH / 2;
+            const y2d = (point.y * fov) / zObject + HEIGHT / 2;
+
+            return { x: x2d, y: y2d, depth: zObject };
+        }
+
+        // --- [4단계] 루프 및 렌더링 메인 함수 ---
+
+        function render() {
+            ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+            // 1. 모든 원래 3D 정점을 회전시키고 2D로 투영 계산
+            const projectedVertices = vertices.map(v => {
+                let r = rotateX(v, angleX);
+                r = rotateY(r, angleY);
+                return project(r);
+            });
+
+            // 2. 뒤에 있는 면이 먼저 그려지도록 렌더링 순서 정렬 (Painter's Algorithm)
+            const facesWithDepth = faces.map(face => {
+                const avgDepth = face.indices.reduce((sum, idx) => sum + projectedVertices[idx].depth, 0) / face.indices.length;
+                return { ...face, avgDepth };
+            });
+            facesWithDepth.sort((a, b) => b.avgDepth - a.avgDepth);
+
+            // 3. 정렬된 순서대로 면과 테두리(간선) 그리기
+            facesWithDepth.forEach(face => {
+                ctx.beginPath();
+                
+                // 면을 구성하는 첫 번째 정점으로 이동
+                const firstPoint = projectedVertices[face.indices[0]];
+                ctx.moveTo(firstPoint.x, firstPoint.y);
+
+                // indices 배열에 기록된 순서대로 선을 연결
+                for (let i = 1; i < face.indices.length; i++) {
+                    const p = projectedVertices[face.indices[i]];
+                    ctx.lineTo(p.x, p.y);
+                }
+                ctx.closePath();
+
+                // 2D 평면에 면의 색상 채우기
+                ctx.fillStyle = face.color;
+                ctx.fill();
+
+                // 면의 테두리(간선) 그리기
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            });
+
+            requestAnimationFrame(render);
+        }
+
+        // --- 마우스 인터랙션 이벤트 처리 ---
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+
+        canvas.addEventListener('mousedown', (e) => { isDragging = true; });
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const deltaX = e.offsetX - previousMousePosition.x;
+                const deltaY = e.offsetY - previousMousePosition.y;
+
+                angleY += deltaX * 0.01; // 마우스 좌우 -> Y축 회전
+                angleX += deltaY * 0.01; // 마우스 상하 -> X축 회전
+            }
+            previousMousePosition = { x: e.offsetX, y: e.offsetY };
+        });
+        window.addEventListener('mouseup', () => { isDragging = false; });
+
+        render();
+    </script>
+</body>
+</html>
