@@ -8,44 +8,37 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-public class Window {
+public class Window extends JFrame {
 
-    public int WIDTH;
-    public int HEIGHT;
-    public int LENGTH; // 총 픽셀 수
-    public PixelPanel pixelPanel;
-    public JFrame frame;
-
-    public Window() {
-        this("640X480");
-    }
+    private int WIDTH;
+    private int HEIGHT;
+    private int LENGTH; // 총 픽셀 수
+    private PixelPanel pixelPanel;
 
     public Window(String str) {
+        super("My Graphic");
         String[] parts = str.split("X");
         WIDTH = Integer.parseInt(parts[0].trim());
         HEIGHT = Integer.parseInt(parts[1].trim());
         LENGTH = WIDTH*HEIGHT;
-        SwingUtilities.invokeLater(() -> {
-            frame = new JFrame("My Graphic");
-            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            
-            // 640x480 크기의 렌더링 패널 추가
-            pixelPanel = new PixelPanel(WIDTH, HEIGHT);
-            frame.setLayout(new BorderLayout());
-            frame.add(pixelPanel, BorderLayout.CENTER);
-            frame.pack();
-            frame.setLocationRelativeTo(null); // 화면 중앙에 배치
-            frame.setVisible(true);
-        });
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        
+        // 640x480 크기의 렌더링 패널 추가
+        this.pixelPanel = new PixelPanel(WIDTH, HEIGHT);
+        setLayout(new BorderLayout());
+        add(pixelPanel, BorderLayout.CENTER);
+        pack();
+        setLocationRelativeTo(null); // 화면 중앙에 배치
+        setVisible(true);
     }
 
-    public void clearColor() {
+    public void clearColor(int color) {
         int[] pixels = new int[LENGTH];
-        Arrays.fill(pixels, 0x000000);
+        Arrays.fill(pixels, color);
         pixelPanel.setPixelsColor(pixels);
     }
 
-    public void rect(int x, int y, int width, int height, int color) {
+    public void makeRect(int x, int y, int width, int height, int color) {
         int[] pixels = pixelPanel.getPixelsColor();
         for(int i=0; i<Math.min(height, HEIGHT); i++) {
             Arrays.fill(pixels, x+((y+i)*WIDTH), Math.min(x+((y+i)*WIDTH)+width, (y+i+1)*WIDTH), color);
@@ -118,4 +111,5 @@ public class Window {
         }
         pixelPanel.setPixelsColor(pixels);
     }
+    
 }

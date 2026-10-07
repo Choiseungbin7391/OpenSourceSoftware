@@ -1,21 +1,35 @@
 package executer;
 
+import component.Shape;
 import component.Window;
 import javax.swing.*;
 
-public class Execute extends Window {
+public class Execute {
 
-    Timer frameTimer;
+    private Timer frameTimer;
+    private Window window;
 
     public Execute() {
-        super();
+        this("640X480");
+    }
+
+    public Execute(String str) {
+        this.window = new Window(str);
+        create();
         frameTimer = new Timer(33, e -> {
-            clearColor();
             render();
-            frame.revalidate();
-            frame.repaint();
+            window.revalidate();
+            window.repaint();
         });
         frameTimer.start();
+    }
+    
+    public final void clearColor(int color) {
+        window.clearColor(color);
+    }
+
+    public final void add(Shape shape) {
+        window.makePoly(shape.getVertices(), shape.getColor());
     }
 
     public void create() {}
